@@ -25,7 +25,7 @@ def parse(raw: dict) -> Tuple[Config, Optional[dict]]:
     assert_has_field(TOP, "config", raw)
     top = raw[TOP]
     args = {
-        "glob": parse_optional_string(top, "glob"),
+        "pattern": parse_optional_string(top, "pattern"),
         "root_dir": parse_optional_string(top, "root_dir"),
         "command": parse_optional_string(top, "command"),
         "concurrency": parse_optional_int(top, "concurrency"),

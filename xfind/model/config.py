@@ -6,7 +6,7 @@ from typing import Optional
 @dataclass
 class Config:
     root_dir: str = ""
-    glob: str = "*"
+    pattern: str = "*"
     command: str = 'echo "{file_name}"'
     concurrency: int = 1
     stop_after: Optional[timedelta] = None

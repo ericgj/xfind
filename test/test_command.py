@@ -54,6 +54,7 @@ def main_sleep(secs, *, stop_after, glob, concurrency=1):
             str(concurrency),
             "--stop-after",
             str(stop_after),
+            "-p",
             glob,
         ]
     )

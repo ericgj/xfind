@@ -16,14 +16,17 @@ from .model.config import Config
 from .util.datetime import utc_from_posix, from_posix
 from .util.itertools import chunk
 
+APP_NAME = "xfind"
+
 
 def main(argv: List[str] = sys.argv[1:]):
     t = time()
 
     cli = ArgumentParser(
-        prog="xfind", description="Execute commands concurrently on searched files"
+        prog=APP_NAME, description="Execute commands concurrently on searched files"
     )
     cli.add_argument("-c", "--config", help="Config file")
+    cli.add_argument("-p", "--pattern", help="File pattern (glob)")
     cli.add_argument("-x", "--command", help="Command pattern")
     cli.add_argument("-n", "--concurrency", type=int, help="Concurrency")
     cli.add_argument(
@@ -32,7 +35,6 @@ def main(argv: List[str] = sys.argv[1:]):
         help="Stop cleanly after specified time, e.g. 2h30m",
     )
     cli.add_argument("--root-dir", help="Root directory of file search")
-    cli.add_argument("glob", help="File pattern (glob)")
 
     args = cli.parse_args(argv)
 
@@ -57,7 +59,7 @@ def main(argv: List[str] = sys.argv[1:]):
 
 
 def run(config: Config, timestamp: float):
-    logger = logging.getLogger()
+    logger = logging.getLogger(APP_NAME)
     executor = ThreadPoolExecutor(max_workers=config.concurrency)
     queue = Queue()
 
@@ -71,7 +73,7 @@ def run(config: Config, timestamp: float):
 
     total_files = 0
     total_processed = 0
-    pattern = os.path.join(config.root_dir, config.glob)
+    pattern = os.path.join(config.root_dir, config.pattern)
     for source_files in chunk(iglob(pattern, recursive=True), config.concurrency):
         for f in source_files:
             total_files += 1
@@ -128,7 +130,7 @@ def render_command(command: str, source_file: str, timestamp: float) -> List[str
 
 
 def run_in_subprocess(command: List[str]) -> subprocess.CompletedProcess:
-    logger = logging.getLogger()
+    logger = logging.getLogger(APP_NAME)
     logger.debug(f"Running: `{shlex.join(command)}`")
     return subprocess.run(
         command, capture_output=True, encoding="utf-8", errors="ignore"
