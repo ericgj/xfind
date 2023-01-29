@@ -30,6 +30,10 @@ def parse(raw: dict) -> Tuple[Config, Optional[dict]]:
         "command": parse_optional_string(top, "command"),
         "concurrency": parse_optional_int(top, "concurrency"),
         "stop_after": parse_optional_duration(top, "stop_after"),
+        "limit": parse_optional_int(top, "limit"),
+        "stdout": parse_optional_bool(top, "stdout"),
+        "stderr": parse_optional_bool(top, "stderr"),
+        "shell": parse_optional_bool(top, "shell"),
     }
     return (
         Config(**{k: args[k] for k in args if not args[k] is None}),
@@ -49,6 +53,11 @@ def parse_optional_string(raw, key: str) -> Optional[str]:
 def parse_optional_int(raw, key: str) -> Optional[int]:
     v = raw.get(key, None)
     return None if v is None else strict(int, key, v)
+
+
+def parse_optional_bool(raw, key: str) -> Optional[bool]:
+    v = raw.get(key, None)
+    return None if v is None else strict(bool, key, v)
 
 
 def parse_optional_duration(raw, key: str) -> Optional[timedelta]:

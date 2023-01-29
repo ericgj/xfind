@@ -10,6 +10,10 @@ class Config:
     command: str = 'echo "{file_name}"'
     concurrency: int = 1
     stop_after: Optional[timedelta] = None
+    limit: Optional[int] = None
+    stdout: bool = False
+    stderr: bool = False
+    shell: bool = False
 
     @classmethod
     def from_args(cls, args) -> "Config":
