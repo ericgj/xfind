@@ -4,6 +4,7 @@ from glob import iglob
 import logging.config
 import logging
 import os.path
+from queue import Queue, Empty
 import shlex
 import subprocess
 import sys
@@ -58,18 +59,22 @@ def main(argv: List[str] = sys.argv[1:]):
 def run(config: Config, timestamp: float):
     logger = logging.getLogger()
     executor = ThreadPoolExecutor(max_workers=config.concurrency)
-    pattern = os.path.join(config.root_dir, config.glob)
+    queue = Queue()
+
     stop_time = (
         None
         if config.stop_after is None
         else timestamp + config.stop_after.total_seconds()
     )
-
     if config.stop_after is not None:
         logger.info(f"Note: stopping cleanly after {config.stop_after}")
 
+    total_files = 0
+    total_processed = 0
+    pattern = os.path.join(config.root_dir, config.glob)
     for source_files in chunk(iglob(pattern, recursive=True), config.concurrency):
         for f in source_files:
+            total_files += 1
             logger.debug(f"Found: {f}")
         f_map = {
             executor.submit(
@@ -78,7 +83,9 @@ def run(config: Config, timestamp: float):
             for f in source_files
         }
         for future in f_map:
-            future.add_done_callback(ProcessCallback(f_map[future], logger=logger))
+            future.add_done_callback(
+                ProcessCallback(f_map[future], queue=queue, logger=logger)
+            )
 
     if config.stop_after is None:
         # Wait for running futures and all pending futures to finish
@@ -87,17 +94,23 @@ def run(config: Config, timestamp: float):
 
     else:
         # Let the workers work until stop_after has elapsed
-        # The problem is, what if all tasks are done before this?
+        # or until all found files have been processed
         remain = stop_time - time()
-        while remain > 0:
-            sleep(1)
+        while remain > 0 and total_processed < total_files:
+            try:
+                _ = queue.get_nowait()
+                total_processed += 1
+            except Empty:
+                sleep(0.1)
             remain = stop_time - time()
 
         # Wait for running futures, but cancel all pending futures
         logger.info("Waiting for currently running tasks to complete")
         executor.shutdown(wait=True, cancel_futures=True)
 
-    logger.info("Done.")
+    # Note it would be nice to report total_processed here, but it won't
+    # be accurate because it won't count those completed in the shutdown.
+    logger.info("Done")
 
 
 def render_command(command: str, source_file: str, timestamp: float) -> List[str]:
@@ -123,8 +136,9 @@ def run_in_subprocess(command: List[str]) -> subprocess.CompletedProcess:
 
 
 class ProcessCallback:
-    def __init__(self, source_file: str, logger: logging.Logger):
+    def __init__(self, source_file: str, queue: Queue, logger: logging.Logger):
         self.source_file = source_file
+        self.queue = queue
         self.logger = logger
 
     def __call__(self, future: Future):
@@ -143,6 +157,7 @@ class ProcessCallback:
             logger.exception(e)
             return
 
+        self.queue.put(None)  # notify process done
         if result.returncode > 0:
             # log subprocess error, including stdout and stderr
             logger.error(f"Failure ({result.returncode}): `{shlex.join(result.args)}`")

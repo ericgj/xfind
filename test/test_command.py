@@ -25,6 +25,26 @@ def test_single_thread_stop_after(caplog):
     assert dur <= 3, f"Execution time was {dur} seconds, expected <= 3"
 
 
+def test_multi_thread_ends_before_stop_after(caplog):
+    caplog.set_level(logging.DEBUG)
+    main_sleep(
+        2,
+        stop_after="10s",
+        concurrency=10,
+        glob=os.path.join(
+            FIXTURE_ROOT, "test_multi_thread_ends_before_stop_after", "*"
+        ),
+    )
+
+    assert len(caplog.records) > 0, "No log records emitted"
+    assert all(
+        rec.levelno < logging.WARNING for rec in caplog.records
+    ), "Warnings/errors found in log"
+
+    dur = caplog.records[-1].created - caplog.records[0].created
+    assert dur <= 10, f"Execution time was {dur} seconds, expected <= 10"
+
+
 def main_sleep(secs, *, stop_after, glob, concurrency=1):
     main(
         [
