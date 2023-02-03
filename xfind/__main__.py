@@ -123,6 +123,7 @@ def run(config: Config, timestamp: float):
         while remain > 0 and total_processed < total_files:
             try:
                 _ = queue.get_nowait()
+                queue.task_done()
                 total_processed += 1
             except Empty:
                 sleep(0.1)
@@ -132,9 +133,16 @@ def run(config: Config, timestamp: float):
         logger.info("Waiting for currently running tasks to complete")
         executor.shutdown(wait=True, cancel_futures=True)
 
-    # Note it would be nice to report total_processed here, but it won't
-    # be accurate because it won't count those completed in the shutdown.
-    logger.info("Done")
+    # Count those completed in the shutdown
+    while True:
+        try:
+            _ = queue.get_nowait()
+            queue.task_done()
+            total_processed += 1
+        except Empty:
+            break
+
+    logger.info(f"Done: {total_processed} total files processed.")
 
 
 def render_command(command: str, source_file: str, timestamp: float) -> List[str]:
@@ -184,7 +192,7 @@ class ProcessCallback:
             result = future.result()
 
         except CancelledError:
-            logger.info(f"Task cancelled for {self.source_file}")
+            logger.debug(f"Task cancelled for {self.source_file}")
             return
 
         except Exception as e:
