@@ -12,7 +12,7 @@ tests_require = ["pytest"]
 
 setup(
     name="xfind",
-    version="0.1",
+    version="0.2",
     description="concurrent find files + exec",
     license="MIT",
     author="Eric Gjertsen",
