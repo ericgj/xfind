@@ -148,10 +148,14 @@ def run(config: Config, timestamp: float):
 def render_command(command: str, source_file: str, timestamp: float) -> List[str]:
     file_name = os.path.abspath(source_file)
     root, ext = os.path.splitext(file_name)
+    dir_name = os.path.dirname(file_name)
+    drive, path = os.path.splitdrive(dir_name)
     data = {
         "file_name": file_name,
         "base_name": os.path.basename(file_name),
-        "dir_name": os.path.dirname(file_name),
+        "dir_name": dir_name,
+        "drive": drive,
+        "drive_path": path,
         "root_name": root,
         "ext_name": ext,
         "timestamp": from_posix(timestamp),
