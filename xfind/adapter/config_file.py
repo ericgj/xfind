@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import TypeVar, Tuple, Optional, cast
+from typing import TypeVar, Tuple, Optional, List, cast
 
 import durationpy  # type: ignore
 
@@ -26,6 +26,7 @@ def parse(raw: dict) -> Tuple[Config, Optional[dict]]:
     top = raw[TOP]
     args = {
         "pattern": parse_optional_string(top, "pattern"),
+        "omits": parse_optional_string_list(top, "omits"),
         "root_dir": parse_optional_string(top, "root_dir"),
         "command": parse_optional_string(top, "command"),
         "concurrency": parse_optional_int(top, "concurrency"),
@@ -58,6 +59,11 @@ def parse_optional_int(raw, key: str) -> Optional[int]:
 def parse_optional_bool(raw, key: str) -> Optional[bool]:
     v = raw.get(key, None)
     return None if v is None else strict(bool, key, v)
+
+
+def parse_optional_string_list(raw, key: str) -> Optional[List[str]]:
+    v = raw.get(key, None)
+    return [] if v is None else strict(list, key, v)
 
 
 def parse_optional_duration(raw, key: str) -> Optional[timedelta]:

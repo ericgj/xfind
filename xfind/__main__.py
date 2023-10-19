@@ -1,5 +1,6 @@
 from argparse import ArgumentParser
 from concurrent.futures import ThreadPoolExecutor, Future, CancelledError
+from fnmatch import fnmatch
 from glob import iglob
 from itertools import islice
 import logging.config
@@ -10,7 +11,7 @@ import shlex
 import subprocess
 import sys
 from time import time, sleep
-from typing import Optional, List
+from typing import Iterable, Optional, List
 
 from .adapter import config_file
 from .model.config import Config
@@ -28,6 +29,13 @@ def main(argv: List[str] = sys.argv[1:]):
     )
     cli.add_argument("-c", "--config", help="Config file")
     cli.add_argument("-p", "--pattern", help="File pattern (glob)")
+    cli.add_argument(
+        "-o",
+        "--omit",
+        dest="omits",
+        action="append",
+        help="Omit file pattern(s) (glob)",
+    )
     cli.add_argument("-x", "--command", help="Command pattern")
     cli.add_argument("-n", "--concurrency", type=int, help="Concurrency")
     cli.add_argument(
@@ -71,6 +79,17 @@ def main(argv: List[str] = sys.argv[1:]):
     run(config, t)
 
 
+def iglob_with_omits(pattern: str, omits: List[str]) -> Iterable[str]:
+    if len(omits) == 0:
+        return iglob(pattern, recursive=True)
+    else:
+        return (
+            fname
+            for fname in iglob(pattern, recursive=True)
+            if not any(fnmatch(fname, o) for o in omits)
+        )
+
+
 def run(config: Config, timestamp: float):
     logger = logging.getLogger(APP_NAME)
     executor = ThreadPoolExecutor(max_workers=config.concurrency)
@@ -87,8 +106,9 @@ def run(config: Config, timestamp: float):
     total_files = 0
     total_processed = 0
     pattern = os.path.join(config.root_dir, config.pattern)
+    omits = [os.path.join(config.root_dir, o) for o in config.omits]
 
-    finder = chunk(iglob(pattern, recursive=True), config.concurrency)
+    finder = chunk(iglob_with_omits(pattern, omits), config.concurrency)
     if config.limit is not None:
         finder = islice(finder, config.limit)
 

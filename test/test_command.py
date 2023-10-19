@@ -1,3 +1,5 @@
+from fnmatch import fnmatch
+from itertools import chain, product
 import logging
 import os.path
 import re
@@ -82,7 +84,49 @@ def test_multi_thread_stopped_after(caplog):
     ), f"Expected log to report {expected_total} total files, was {last_msg}"
 
 
-def main_sleep(secs, *, stop_after, glob, concurrency=1):
+def test_omits(caplog):
+    caplog.set_level(logging.DEBUG)
+
+    fixture_path = os.path.join(FIXTURE_ROOT, "test_omits")
+    expected_total = 5
+    omits = [
+        os.path.join(fixture_path, "omit*"),
+        os.path.join(fixture_path, "**", "*.omit"),
+    ]
+
+    main_sleep(
+        1,
+        stop_after="2s",
+        glob=os.path.join(fixture_path, "**"),
+        omits=omits,
+    )
+
+    assert len(caplog.records) > 0, "No log records emitted"
+    assert all(
+        rec.levelno < logging.WARNING for rec in caplog.records
+    ), "Warnings/errors found in log"
+
+    last_msg = caplog.records[-1].message
+    assert (
+        re.search(f"{expected_total} total files processed", last_msg) is not None
+    ), f"Expected log to report {expected_total} total files, was {last_msg}"
+
+    found = [
+        m[1]
+        for r in caplog.records
+        if (m := re.search(r"Found: (.*)", r.message)) is not None
+    ]
+    assert (
+        len(found) == expected_total
+    ), f"Expected {expected_total} log records for found files, was {len(found)}"
+
+    match_omits = [f for (f, o) in product(found, omits) if fnmatch(f, o)]
+    assert (
+        len(match_omits) == 0
+    ), f"Expected no found files to match omit patterns, but found: {match_omits}"
+
+
+def main_sleep(secs, *, stop_after, glob, omits=[], concurrency=1):
     main(
         [
             "-x",
@@ -94,4 +138,5 @@ def main_sleep(secs, *, stop_after, glob, concurrency=1):
             "-p",
             glob,
         ]
+        + list(chain.from_iterable([["-o", o] for o in omits]))
     )
