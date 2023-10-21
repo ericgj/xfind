@@ -27,6 +27,8 @@ def parse(raw: dict) -> Tuple[Config, Optional[dict]]:
     args = {
         "pattern": parse_optional_string(top, "pattern"),
         "omits": parse_optional_string_list(top, "omits"),
+        "find_files": parse_optional_bool(top, "find_files"),
+        "find_dirs": parse_optional_bool(top, "find_dirs"),
         "root_dir": parse_optional_string(top, "root_dir"),
         "command": parse_optional_string(top, "command"),
         "concurrency": parse_optional_int(top, "concurrency"),

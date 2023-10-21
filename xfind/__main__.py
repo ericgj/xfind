@@ -11,7 +11,7 @@ import shlex
 import subprocess
 import sys
 from time import time, sleep
-from typing import Iterable, Optional, List
+from typing import Iterable, Optional, Tuple, List
 
 from .adapter import config_file
 from .model.config import Config
@@ -24,6 +24,24 @@ APP_NAME = "xfind"
 def main(argv: List[str] = sys.argv[1:]):
     t = time()
 
+    cli = build_cli()
+    args = cli.parse_args(argv)
+
+    config, logging_config = args_to_config(args)
+    print(config)
+
+    if logging_config is None:
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format="%(levelname)-1s | %(asctime)s | %(name)s | %(module)s | %(threadName)s | %(message)s",
+        )
+    else:
+        logging.config.dictConfig(logging_config)
+
+    run(config, t)
+
+
+def build_cli() -> ArgumentParser:
     cli = ArgumentParser(
         prog=APP_NAME, description="Execute commands concurrently on searched files"
     )
@@ -48,6 +66,24 @@ def main(argv: List[str] = sys.argv[1:]):
     )
     cli.add_argument("--root-dir", help="Root directory of file search")
     cli.add_argument(
+        "--files",
+        dest="find_files",
+        action="store_true",
+        help="Include non-directories",
+    )
+    cli.add_argument(
+        "--no-files",
+        dest="find_files",
+        action="store_false",
+        help="Omit non-directories",
+    )
+    cli.add_argument(
+        "--dirs", dest="find_dirs", action="store_true", help="Include directories"
+    )
+    cli.add_argument(
+        "--no-dirs", dest="find_dirs", action="store_false", help="Omit directories"
+    )
+    cli.add_argument(
         "--stdout", default=False, action="store_true", help="Relay task out to stdout"
     )
     cli.add_argument(
@@ -57,37 +93,53 @@ def main(argv: List[str] = sys.argv[1:]):
         "--shell", default=False, action="store_true", help="Run in DOS shell"
     )
 
-    args = cli.parse_args(argv)
+    cli.set_defaults(
+        find_files=None, find_dirs=None
+    )  # so these are not defaulted False
+    return cli
 
+
+def args_to_config(args) -> Tuple[Config, Optional[dict]]:
     config: Config
-    logging_config: Optional[dict]
     if args.config is None:
         config = Config.from_args(vars(args))
         logging_config = None
     else:
         config, logging_config = config_file.parse_file(args.config)
         config = config.merge_args(vars(args))
-
-    if logging_config is None:
-        logging.basicConfig(
-            level=logging.DEBUG,
-            format="%(levelname)-1s | %(asctime)s | %(name)s | %(module)s | %(threadName)s | %(message)s",
-        )
-    else:
-        logging.config.dictConfig(logging_config)
-
-    run(config, t)
+    return (config, logging_config)
 
 
-def iglob_with_omits(pattern: str, omits: List[str]) -> Iterable[str]:
+def iglob_with_omits(
+    pattern: str, omits: List[str], *, find_files: bool, find_dirs: bool
+) -> Iterable[str]:
     if len(omits) == 0:
-        return iglob(pattern, recursive=True)
+        if find_files and find_dirs:
+            return iglob(pattern, recursive=True)
+        else:
+            return (
+                fname
+                for fname in iglob(pattern, recursive=True)
+                if (find_files and os.path.isfile(fname))
+                or (find_dirs and os.path.isdir(fname))
+            )
     else:
-        return (
-            fname
-            for fname in iglob(pattern, recursive=True)
-            if not any(fnmatch(fname, o) for o in omits)
-        )
+        if find_files and find_dirs:
+            return (
+                fname
+                for fname in iglob(pattern, recursive=True)
+                if not any(fnmatch(fname, o) for o in omits)
+            )
+        else:
+            return (
+                fname
+                for fname in iglob(pattern, recursive=True)
+                if (
+                    (find_files and os.path.isfile(fname))
+                    or (find_dirs and os.path.isdir(fname))
+                )
+                and (not any(fnmatch(fname, o) for o in omits))
+            )
 
 
 def run(config: Config, timestamp: float):
@@ -108,7 +160,15 @@ def run(config: Config, timestamp: float):
     pattern = os.path.join(config.root_dir, config.pattern)
     omits = [os.path.join(config.root_dir, o) for o in config.omits]
 
-    finder = chunk(iglob_with_omits(pattern, omits), config.concurrency)
+    finder = chunk(
+        iglob_with_omits(
+            pattern,
+            omits,
+            find_files=config.find_files,
+            find_dirs=config.find_dirs,
+        ),
+        config.concurrency,
+    )
     if config.limit is not None:
         finder = islice(finder, config.limit)
 

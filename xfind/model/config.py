@@ -8,6 +8,8 @@ class Config:
     root_dir: str = ""
     pattern: str = "*"
     omits: List[str] = field(default_factory=list)
+    find_files: bool = True
+    find_dirs: bool = True
     command: str = 'echo "{file_name}"'
     concurrency: int = 1
     stop_after: Optional[timedelta] = None

@@ -3,6 +3,7 @@ from itertools import chain, product
 import logging
 import os.path
 import re
+from typing import List
 
 from xfind.__main__ import main
 
@@ -88,7 +89,7 @@ def test_omits(caplog):
     caplog.set_level(logging.DEBUG)
 
     fixture_path = os.path.join(FIXTURE_ROOT, "test_omits")
-    expected_total = 5
+    expected_total = 6
     omits = [
         os.path.join(fixture_path, "omit*"),
         os.path.join(fixture_path, "**", "*.omit"),
@@ -126,7 +127,119 @@ def test_omits(caplog):
     ), f"Expected no found files to match omit patterns, but found: {match_omits}"
 
 
-def main_sleep(secs, *, stop_after, glob, omits=[], concurrency=1):
+def test_omits_no_dirs(caplog):
+    caplog.set_level(logging.DEBUG)
+
+    fixture_path = os.path.join(FIXTURE_ROOT, "test_omits")
+    expected_total = 1
+    omits = [
+        os.path.join(fixture_path, "omit*"),
+        os.path.join(fixture_path, "**", "*.omit"),
+    ]
+
+    main_sleep(
+        1,
+        stop_after="2s",
+        glob=os.path.join(fixture_path, "**"),
+        omits=omits,
+        find_dirs=False,
+    )
+
+    assert len(caplog.records) > 0, "No log records emitted"
+    assert all(
+        rec.levelno < logging.WARNING for rec in caplog.records
+    ), "Warnings/errors found in log"
+
+    last_msg = caplog.records[-1].message
+    assert (
+        re.search(f"{expected_total} total files processed", last_msg) is not None
+    ), f"Expected log to report {expected_total} total files, was {last_msg}"
+
+
+def test_no_omits_no_dirs(caplog):
+    caplog.set_level(logging.DEBUG)
+
+    fixture_path = os.path.join(FIXTURE_ROOT, "test_omits")
+    expected_total = 3
+    omits: List[str] = []
+
+    main_sleep(
+        1,
+        stop_after="2s",
+        glob=os.path.join(fixture_path, "**"),
+        omits=omits,
+        find_dirs=False,
+    )
+
+    assert len(caplog.records) > 0, "No log records emitted"
+    assert all(
+        rec.levelno < logging.WARNING for rec in caplog.records
+    ), "Warnings/errors found in log"
+
+    last_msg = caplog.records[-1].message
+    assert (
+        re.search(f"{expected_total} total files processed", last_msg) is not None
+    ), f"Expected log to report {expected_total} total files, was {last_msg}"
+
+
+def test_omits_no_files(caplog):
+    caplog.set_level(logging.DEBUG)
+
+    fixture_path = os.path.join(FIXTURE_ROOT, "test_omits")
+    expected_total = 5
+    omits = [
+        os.path.join(fixture_path, "omit*"),
+        os.path.join(fixture_path, "**", "*.omit"),
+    ]
+
+    main_sleep(
+        1,
+        stop_after="2s",
+        glob=os.path.join(fixture_path, "**"),
+        omits=omits,
+        find_files=False,
+    )
+
+    assert len(caplog.records) > 0, "No log records emitted"
+    assert all(
+        rec.levelno < logging.WARNING for rec in caplog.records
+    ), "Warnings/errors found in log"
+
+    last_msg = caplog.records[-1].message
+    assert (
+        re.search(f"{expected_total} total files processed", last_msg) is not None
+    ), f"Expected log to report {expected_total} total files, was {last_msg}"
+
+
+def test_no_omits_no_files(caplog):
+    caplog.set_level(logging.DEBUG)
+
+    fixture_path = os.path.join(FIXTURE_ROOT, "test_omits")
+    expected_total = 8
+    omits: List[str] = []
+
+    main_sleep(
+        1,
+        stop_after="2s",
+        glob=os.path.join(fixture_path, "**"),
+        omits=omits,
+        find_files=False,
+    )
+
+    assert len(caplog.records) > 0, "No log records emitted"
+    assert all(
+        rec.levelno < logging.WARNING for rec in caplog.records
+    ), "Warnings/errors found in log"
+
+    last_msg = caplog.records[-1].message
+    assert (
+        re.search(f"{expected_total} total files processed", last_msg) is not None
+    ), f"Expected log to report {expected_total} total files, was {last_msg}"
+
+
+def main_sleep(
+    secs, *, stop_after, glob, omits=[], find_files=True, find_dirs=True, concurrency=1
+):
     main(
         [
             "-x",
@@ -139,4 +252,6 @@ def main_sleep(secs, *, stop_after, glob, omits=[], concurrency=1):
             glob,
         ]
         + list(chain.from_iterable([["-o", o] for o in omits]))
+        + (["--no-files"] if not find_files else [])
+        + (["--no-dirs"] if not find_dirs else [])
     )
